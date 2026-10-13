@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Standalone CLI that renders a PNG preview of TerraPrety's large scale world generation
+    (oceans, landform height map, mountain ranges, climate) without starting the game.
+
+    The mod's map layer sources are compiled in directly so the preview always matches the checked out code.
+    Game assemblies are referenced from $(VINTAGE_STORY) and resolved from the same folder at runtime.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <AssemblyName>terraprety-preview</AssemblyName>
+    <RootNamespace>TerraPrety.Preview</RootNamespace>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <VINTAGE_STORY Condition="'$(VINTAGE_STORY)' == ''">$(HOME)/Apps/VintageStory</VINTAGE_STORY>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="VintagestoryAPI">
+      <HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VintagestoryLib">
+      <HintPath>$(VINTAGE_STORY)/VintagestoryLib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VSEssentials">
+      <HintPath>$(VINTAGE_STORY)/Mods/VSEssentials.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VSSurvivalMod">
+      <HintPath>$(VINTAGE_STORY)/Mods/VSSurvivalMod.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(VINTAGE_STORY)/Lib/Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="protobuf-net">
+      <HintPath>$(VINTAGE_STORY)/Lib/protobuf-net.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.Data.Sqlite">
+      <HintPath>$(VINTAGE_STORY)/Lib/Microsoft.Data.Sqlite.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>GameDir</_Parameter1>
+      <_Parameter2>$(VINTAGE_STORY)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ModAssetsDir</_Parameter1>
+      <_Parameter2>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../TerraPrety/assets'))</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <!-- The mod's map generation code, compiled as-is. Only pure noise/map layer files are linked. -->
+  <ItemGroup>
+    <Compile Include="../TerraPrety/src/WorldGenConfig.cs" Link="Mod/WorldGenConfig.cs" />
+    <Compile Include="../TerraPrety/src/VoronoiNoise.cs" Link="Mod/VoronoiNoise.cs" />
+    <Compile Include="../TerraPrety/src/NoiseRemapper.cs" Link="Mod/NoiseRemapper.cs" />
+    <Compile Include="../TerraPrety/src/MapLayerOceansSmooth.cs" Link="Mod/MapLayerOceansSmooth.cs" />
+    <Compile Include="../TerraPrety/src/LandformHeights/*.cs" Link="Mod/LandformHeights/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

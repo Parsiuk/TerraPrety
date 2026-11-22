@@ -8,10 +8,10 @@ namespace TerraPrety.Preview;
 public static class Renderer
 {
     public static uint[] Render(string layer, SampleGrid grid, MapGenerator gen, WorldSettings world, float[] actualSurface = null,
-                                IReadOnlyList<MapMarker> markers = null, SvgIcons icons = null)
+                                IReadOnlyList<MapMarker> markers = null, SvgIcons icons = null, int? markerSize = null)
     {
         var pixels = RenderLayer(layer, grid, gen, world, actualSurface);
-        if (markers != null && icons != null) DrawMapMarkers(pixels, grid, markers, icons);
+        if (markers != null && icons != null) DrawMapMarkers(pixels, grid, markers, icons, markerSize);
         return pixels;
     }
 
@@ -170,9 +170,10 @@ public static class Renderer
 
     // WaypointMapComponent.Render: the icon in black at 60% opacity, a little larger and offset down right, then the
     // icon in the marker's color on top.
-    private static void DrawMapMarkers(uint[] pixels, SampleGrid grid, IReadOnlyList<MapMarker> markers, SvgIcons icons)
+    private static void DrawMapMarkers(uint[] pixels, SampleGrid grid, IReadOnlyList<MapMarker> markers, SvgIcons icons, int? markerSize)
     {
-        int size = Math.Clamp(grid.Width / 80, 16, 32);
+        // Default kept small so markers don't hide much terrain, but large enough to tell the icons apart.
+        int size = markerSize ?? Math.Clamp(grid.Width / 160, 8, 16);
         int shadowSize = (int)Math.Round(size * 1.1);
         int offset = Math.Max(1, size / 16);
 

@@ -94,7 +94,7 @@ public static class PreviewCommand
         {
             var path = options.Layers.Count == 1 ? options.Output
                 : Path.Combine(Path.GetDirectoryName(options.Output) ?? "", Path.GetFileNameWithoutExtension(options.Output) + "-" + layer + ".png");
-            Png.Write(path, grid.Width, grid.Height, Renderer.Render(layer, grid, gen, world, actual, markers, icons));
+            Png.Write(path, grid.Width, grid.Height, Renderer.Render(layer, grid, gen, world, actual, markers, icons, options.MarkerSize));
             Console.WriteLine($"Wrote {path}");
         }
         return 0;

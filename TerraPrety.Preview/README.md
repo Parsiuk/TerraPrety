@@ -54,7 +54,7 @@ So the tool loads the installed mods the way the game does: `VintagestoryData/Mo
 | `climate`   | Temperature (blue to red) and rainfall (saturation)                                           |
 | `actual`    | With `--save`: the terrain the game generated, in the `composite` palette, with the estimate dimmed where nothing was generated yet. Compare with `composite`. |
 
-The white dot is the world spawn, magenta dots are story structures. With `--map-markers` (needs `--save`), the waypoints players put on their in-game map are drawn on every layer, using the game's map icons (including icons added by mods) and the marker colors, with the same drop shadow as in the game. Temporary markers are left out. An unknown icon is drawn as a circle, as in the game.
+The white dot is the world spawn, magenta dots are story structures. With `--map-markers` (needs `--save`), the waypoints players put on their in-game map are drawn on every layer, using the game's map icons (including icons added by mods) and the marker colors, with the same drop shadow as in the game. Icons are 8 to 16 px by default, growing with the image size; `--marker-size <px>` sets the size explicitly. Temporary markers are left out. An unknown icon is drawn as a circle, as in the game.
 
 ## Accuracy
 

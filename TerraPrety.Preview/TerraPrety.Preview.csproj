@@ -43,6 +43,10 @@
       <HintPath>$(VINTAGE_STORY)/Lib/protobuf-net.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="cairo-sharp">
+      <HintPath>$(VINTAGE_STORY)/Lib/cairo-sharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Microsoft.Data.Sqlite">
       <HintPath>$(VINTAGE_STORY)/Lib/Microsoft.Data.Sqlite.dll</HintPath>
       <Private>false</Private>

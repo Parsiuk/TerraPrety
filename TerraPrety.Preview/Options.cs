@@ -30,6 +30,7 @@ public class Options
     public string Output = "preview.png";
     public bool Verify;
     public bool AllLayersRequested;
+    public bool MapMarkers;
     public int? Threads;
 
     public const string Usage = """
@@ -73,6 +74,7 @@ public class Options
           -o, --output <file.png>        Output file (default preview.png). With several layers,
                                          each one is written as <name>-<layer>.png
           --threads <n>                  Worker threads for sampling (default: all CPU cores)
+          --map-markers                  Draw the players' map markers from --save, with the in-game icons and colors
           --verify                       Compare the generated ocean and landform maps against the map regions
                                          the game stored in --save, and report how well they match
           -h, --help                     Show this help
@@ -134,6 +136,7 @@ public class Options
                     break;
                 case "-o": case "--output": o.Output = Next(); break;
                 case "--verify": o.Verify = true; break;
+                case "--map-markers": o.MapMarkers = true; break;
                 case "--threads": o.Threads = ParseInt(arg, Next()); break;
                 default: throw new ArgumentException("Unknown option: " + arg);
             }
@@ -142,6 +145,7 @@ public class Options
         if (o.BlocksPerPixel < 1) throw new ArgumentException("--scale must be at least 1.");
         if (o.SizeBlocks < o.BlocksPerPixel) throw new ArgumentException("--size must be at least --scale.");
         if (o.Verify && o.SavePath == null) throw new ArgumentException("--verify needs --save.");
+        if (o.MapMarkers && o.SavePath == null) throw new ArgumentException("--map-markers needs --save.");
         if (o.SavePath == null && o.AllLayersRequested) o.Layers.Remove("actual");
         if (o.SavePath == null && o.Layers.Contains("actual")) throw new ArgumentException("The actual layer needs --save.");
         if (o.SavePath == null && o.Seed == null && !o.ShowHelp) throw new ArgumentException("Pass --seed or --save.");

@@ -94,6 +94,28 @@ public sealed class AssetSource : IDisposable
         return domains.Select(d => TryGet(new AssetLocation(d, path))).Where(a => a != null).ToList();
     }
 
+    // Locations of all assets whose path starts with prefix, in any domain (like IAssetManager.GetMany without loading).
+    public List<AssetLocation> List(string prefix)
+    {
+        var result = new Dictionary<string, AssetLocation>();
+        foreach (var folder in GameDomainFolders)
+        {
+            var dir = Path.Combine(gameAssetsDir, folder, prefix);
+            if (!Directory.Exists(dir)) continue;
+            foreach (var file in Directory.GetFiles(dir, "*", SearchOption.AllDirectories).Order())
+            {
+                var path = Path.GetRelativePath(Path.Combine(gameAssetsDir, folder), file).Replace('\\', '/').ToLowerInvariant();
+                result.TryAdd("game:" + path, new AssetLocation("game", path));
+            }
+        }
+        foreach (var key in modFiles.Keys)
+        {
+            int colon = key.IndexOf(':');
+            if (key[(colon + 1)..].StartsWith(prefix)) result[key] = new AssetLocation(key[..colon], key[(colon + 1)..]);
+        }
+        return [.. result.Values];
+    }
+
     private string ReadRaw(AssetLocation location)
     {
         if (modFiles.TryGetValue(location.Domain + ":" + location.Path, out var read)) return read();

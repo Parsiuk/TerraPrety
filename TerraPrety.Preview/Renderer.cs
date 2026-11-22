@@ -1,11 +1,21 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Vintagestory.API.Common;
 
 namespace TerraPrety.Preview;
 
 public static class Renderer
 {
-    public static uint[] Render(string layer, SampleGrid grid, MapGenerator gen, WorldSettings world, float[] actualSurface = null)
+    public static uint[] Render(string layer, SampleGrid grid, MapGenerator gen, WorldSettings world, float[] actualSurface = null,
+                                IReadOnlyList<MapMarker> markers = null, SvgIcons icons = null)
+    {
+        var pixels = RenderLayer(layer, grid, gen, world, actualSurface);
+        if (markers != null && icons != null) DrawMapMarkers(pixels, grid, markers, icons);
+        return pixels;
+    }
+
+    private static uint[] RenderLayer(string layer, SampleGrid grid, MapGenerator gen, WorldSettings world, float[] actualSurface)
     {
         if (layer == "actual") return RenderActual(grid, gen, world, actualSurface ?? throw new ArgumentException("The actual layer needs --save."));
 
@@ -37,7 +47,7 @@ public static class Renderer
     // dimmed where nothing has been generated yet. Compare with the composite layer to see how the estimate holds up.
     private static uint[] RenderActual(SampleGrid grid, MapGenerator gen, WorldSettings world, float[] actualSurface)
     {
-        var estimate = Render("composite", grid, gen, world);
+        var estimate = RenderLayer("composite", grid, gen, world, null);
         var actual = new SampleGrid { Width = grid.Width, Height = grid.Height, BlocksPerPixel = grid.BlocksPerPixel, OriginX = grid.OriginX, OriginZ = grid.OriginZ };
         actual.Samples = (MapSample[])grid.Samples.Clone();
         for (int i = 0; i < actual.Samples.Length; i++)
@@ -156,6 +166,48 @@ public static class Renderer
         int markerRadius = Math.Clamp(grid.Width / 300, 2, 6);
         Mark(world.MapSizeX / 2, world.MapSizeZ / 2, 0xffffff, markerRadius + 1);
         foreach (var loc in gen.StoryLocations) Mark(loc.X, loc.Z, 0xff3df5, markerRadius);
+    }
+
+    // WaypointMapComponent.Render: the icon in black at 60% opacity, a little larger and offset down right, then the
+    // icon in the marker's color on top.
+    private static void DrawMapMarkers(uint[] pixels, SampleGrid grid, IReadOnlyList<MapMarker> markers, SvgIcons icons)
+    {
+        int size = Math.Clamp(grid.Width / 80, 16, 32);
+        int shadowSize = (int)Math.Round(size * 1.1);
+        int offset = Math.Max(1, size / 16);
+
+        void Stamp(float[] mask, int maskSize, int cx, int cz, uint color, double opacity)
+        {
+            int x0 = cx - maskSize / 2, z0 = cz - maskSize / 2;
+            for (int dz = 0; dz < maskSize; dz++)
+            {
+                int z = z0 + dz;
+                if (z < 0 || z >= grid.Height) continue;
+                for (int dx = 0; dx < maskSize; dx++)
+                {
+                    int x = x0 + dx;
+                    float a = mask[dz * maskSize + dx];
+                    if (x < 0 || x >= grid.Width || a <= 0) continue;
+                    ref uint p = ref pixels[z * grid.Width + x];
+                    p = Lerp(p, color, a * opacity);
+                }
+            }
+        }
+
+        // Draw markers further south last, so overlapping icons stack like a map read top to bottom.
+        foreach (var marker in markers.OrderBy(m => m.Z))
+        {
+            int cx = (marker.X - grid.OriginX) / grid.BlocksPerPixel, cz = (marker.Z - grid.OriginZ) / grid.BlocksPerPixel;
+            if (cx < -size || cz < -size || cx >= grid.Width + size || cz >= grid.Height + size) continue;
+            var mask = icons.Mask(marker.Icon, size);
+            var shadow = icons.Mask(marker.Icon, shadowSize);
+            if (mask == null) continue;
+
+            double alpha = ((marker.Color >> 24) & 0xff) / 255.0;
+            if (alpha == 0) alpha = 1; // Colors picked in the game are opaque; treat a missing alpha byte as opaque too.
+            Stamp(shadow, shadowSize, cx + offset, cz + offset, 0x000000, 0.6 * alpha);
+            Stamp(mask, size, cx, cz, (uint)marker.Color & 0xffffff, alpha);
+        }
     }
 
     private static uint Gradient(double t, uint a, uint b, uint c) => t < 0.5 ? Lerp(a, b, t * 2) : Lerp(b, c, (t - 0.5) * 2);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -70,6 +71,17 @@ public static class PreviewCommand
         var grid = SampleGrid.Generate(gen, spec, options, threads);
         Console.WriteLine($"Sampled {grid.Width}x{grid.Height} px at {options.BlocksPerPixel} blocks/px on {threads} thread(s) in {sw.Elapsed.TotalSeconds:0.0}s");
 
+        List<MapMarker> markers = null;
+        SvgIcons icons = null;
+        if (options.MapMarkers)
+        {
+            markers = MapMarkers.FromSave(save);
+            icons = new SvgIcons(assets);
+            var unknown = markers.Select(m => m.Icon).Distinct().Where(i => !icons.Has(i)).ToList();
+            Console.WriteLine($"{markers.Count} map markers (icons: {string.Join(", ", markers.GroupBy(m => m.Icon).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}"))})" +
+                              (unknown.Count > 0 ? $"; unknown icon(s) {string.Join(", ", unknown)} drawn as circle, as in the game" : ""));
+        }
+
         float[] actual = null;
         if (options.Layers.Contains("actual"))
         {
@@ -82,7 +94,7 @@ public static class PreviewCommand
         {
             var path = options.Layers.Count == 1 ? options.Output
                 : Path.Combine(Path.GetDirectoryName(options.Output) ?? "", Path.GetFileNameWithoutExtension(options.Output) + "-" + layer + ".png");
-            Png.Write(path, grid.Width, grid.Height, Renderer.Render(layer, grid, gen, world, actual));
+            Png.Write(path, grid.Width, grid.Height, Renderer.Render(layer, grid, gen, world, actual, markers, icons));
             Console.WriteLine($"Wrote {path}");
         }
         return 0;

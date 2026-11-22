@@ -5,8 +5,10 @@ namespace TerraPrety.Preview;
 
 public static class Renderer
 {
-    public static uint[] Render(string layer, SampleGrid grid, MapGenerator gen, WorldSettings world)
+    public static uint[] Render(string layer, SampleGrid grid, MapGenerator gen, WorldSettings world, float[] actualSurface = null)
     {
+        if (layer == "actual") return RenderActual(grid, gen, world, actualSurface ?? throw new ArgumentException("The actual layer needs --save."));
+
         var pixels = new uint[grid.Width * grid.Height];
         System.Func<SampleGrid, int, int, uint> shader = layer switch
         {
@@ -27,6 +29,31 @@ public static class Renderer
             }
         }
 
+        DrawMarkers(pixels, grid, gen, world);
+        return pixels;
+    }
+
+    // What the game generated: the composite palette over the terrain heights stored in the savegame, with the estimate
+    // dimmed where nothing has been generated yet. Compare with the composite layer to see how the estimate holds up.
+    private static uint[] RenderActual(SampleGrid grid, MapGenerator gen, WorldSettings world, float[] actualSurface)
+    {
+        var estimate = Render("composite", grid, gen, world);
+        var actual = new SampleGrid { Width = grid.Width, Height = grid.Height, BlocksPerPixel = grid.BlocksPerPixel, OriginX = grid.OriginX, OriginZ = grid.OriginZ };
+        actual.Samples = (MapSample[])grid.Samples.Clone();
+        for (int i = 0; i < actual.Samples.Length; i++)
+        {
+            if (!float.IsNaN(actualSurface[i])) actual.Samples[i].SurfaceY = actualSurface[i];
+        }
+
+        var pixels = new uint[grid.Width * grid.Height];
+        for (int z = 0; z < grid.Height; z++)
+        {
+            for (int x = 0; x < grid.Width; x++)
+            {
+                int i = z * grid.Width + x;
+                pixels[i] = float.IsNaN(actualSurface[i]) ? Lerp(Scale(estimate[i], 0.45), 0x303030, 0.5) : Composite(actual, x, z, world);
+            }
+        }
         DrawMarkers(pixels, grid, gen, world);
         return pixels;
     }

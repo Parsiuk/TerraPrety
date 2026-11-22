@@ -50,17 +50,27 @@ public sealed class SaveFile : IDisposable
         return settings;
     }
 
-    // Position key used by the game for map regions: x | z << 27 (y and dimension are always 0).
+    // Position key used by the game for map regions and map chunks (ChunkPos, savegame v2): x | z << 27, 22 bits each,
+    // with the dimension in bits 22-26 and 44-48. Only the main dimension (0) has generated terrain.
     public static long RegionKey(int regionX, int regionZ) => (long)((uint)regionX | ((ulong)regionZ << 27));
 
-    public static (int X, int Z) FromRegionKey(long key) => ((int)(key & ((1 << 27) - 1)), (int)((key >> 27) & ((1 << 27) - 1)));
+    private const long CoordMask = (1 << 22) - 1;
+    private const long DimensionBits = (31L << 22) | (31L << 44);
+
+    public static (int X, int Z) FromRegionKey(long key) => ((int)(key & CoordMask), (int)((key >> 27) & CoordMask));
+
+    private static bool IsMainDimension(long key) => (key & DimensionBits) == 0;
 
     public IEnumerable<(int X, int Z)> RegionPositions()
     {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT position FROM mapregion";
         using var reader = cmd.ExecuteReader();
-        while (reader.Read()) yield return FromRegionKey(reader.GetInt64(0));
+        while (reader.Read())
+        {
+            long key = reader.GetInt64(0);
+            if (IsMainDimension(key)) yield return FromRegionKey(key);
+        }
     }
 
     public ServerMapRegion GetRegion(int regionX, int regionZ)
@@ -79,7 +89,9 @@ public sealed class SaveFile : IDisposable
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            var (x, z) = FromRegionKey(reader.GetInt64(0));
+            long key = reader.GetInt64(0);
+            if (!IsMainDimension(key)) continue;
+            var (x, z) = FromRegionKey(key);
             var chunk = ServerMapChunk.FromBytes((byte[])reader.GetValue(1));
             if (chunk.WorldGenTerrainHeightMap is { Length: > 0 } heights) yield return (x, z, heights);
         }

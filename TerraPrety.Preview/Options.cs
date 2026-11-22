@@ -8,13 +8,14 @@ namespace TerraPrety.Preview;
 
 public class Options
 {
-    public static readonly string[] AllLayers = ["composite", "height", "landforms", "ocean", "mountains", "climate"];
+    public static readonly string[] AllLayers = ["composite", "height", "landforms", "ocean", "mountains", "climate", "actual"];
 
     public bool ShowHelp;
     public string GameDir;
     public string SavePath;
     public string ConfigPath;
     public string ModAssets;
+    public string ModsDir;
 
     public int? Seed;
     public int? WorldSize;
@@ -28,6 +29,7 @@ public class Options
     public List<string> Layers = ["composite"];
     public string Output = "preview.png";
     public bool Verify;
+    public bool AllLayersRequested;
     public int? Threads;
 
     public const string Usage = """
@@ -56,13 +58,18 @@ public class Options
           --config <TerraPrety.json>     Mod config (default: VintagestoryData/ModConfig/TerraPrety.json if it exists,
                                          otherwise the defaults compiled into the mod)
           --mod-assets <dir|zip>         Mod assets folder or released mod zip (default: this repo's TerraPrety/assets)
+          --mods <dir|none>              Other installed mods, whose assets and patches can change world generation, e.g.
+                                         story structures that force land (default: VintagestoryData/Mods if it exists;
+                                         mods disabled in the game's mod manager are skipped; any TerraPrety there is
+                                         replaced by --mod-assets)
           --game <dir>                   Vintage Story install folder (default: $VINTAGE_STORY or the build-time path)
 
         Area and output:
           --center <x,z>                 Center in in-game coordinates, i.e. relative to the world spawn (default 0,0)
           --size <blocks>                Width and height of the rendered square (default 65536)
           --scale <blocks>               Blocks per pixel, at least 1 (default 32)
-          --layers <list|all>            Comma separated: composite, height, landforms, ocean, mountains, climate
+          --layers <list|all>            Comma separated: composite, height, landforms, ocean, mountains, climate, and with
+                                         --save also actual (the terrain the game generated, for comparison with composite)
           -o, --output <file.png>        Output file (default preview.png). With several layers,
                                          each one is written as <name>-<layer>.png
           --threads <n>                  Worker threads for sampling (default: all CPU cores)
@@ -92,6 +99,7 @@ public class Options
                 case "--save": o.SavePath = Next(); break;
                 case "--config": o.ConfigPath = Next(); break;
                 case "--mod-assets": o.ModAssets = Next(); break;
+                case "--mods": o.ModsDir = Next(); break;
                 case "--seed": o.Seed = ParseInt(arg, Next()); break;
                 case "--world-size": o.WorldSize = ParseInt(arg, Next()); break;
                 case "--world-height": o.WorldHeight = ParseInt(arg, Next()); break;
@@ -120,6 +128,7 @@ public class Options
                 case "--layers":
                     var value = Next();
                     o.Layers = value == "all" ? [.. AllLayers] : [.. value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+                    o.AllLayersRequested = value == "all";
                     var unknown = o.Layers.Except(AllLayers).ToList();
                     if (unknown.Count > 0) throw new ArgumentException("Unknown layer(s): " + string.Join(", ", unknown));
                     break;
@@ -133,16 +142,25 @@ public class Options
         if (o.BlocksPerPixel < 1) throw new ArgumentException("--scale must be at least 1.");
         if (o.SizeBlocks < o.BlocksPerPixel) throw new ArgumentException("--size must be at least --scale.");
         if (o.Verify && o.SavePath == null) throw new ArgumentException("--verify needs --save.");
+        if (o.SavePath == null && o.AllLayersRequested) o.Layers.Remove("actual");
+        if (o.SavePath == null && o.Layers.Contains("actual")) throw new ArgumentException("The actual layer needs --save.");
         if (o.SavePath == null && o.Seed == null && !o.ShowHelp) throw new ArgumentException("Pass --seed or --save.");
         return o;
     }
 
     public static string DefaultModConfigPath()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var path = Path.Combine(appData, "VintagestoryData", "ModConfig", "TerraPrety.json");
+        var path = Path.Combine(DataDir, "ModConfig", "TerraPrety.json");
         return File.Exists(path) ? path : null;
     }
+
+    public static string DefaultModsDir()
+    {
+        var path = Path.Combine(DataDir, "Mods");
+        return Directory.Exists(path) ? path : null;
+    }
+
+    private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VintagestoryData");
 
     private static int ParseInt(string name, string value) =>
         int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : throw new ArgumentException($"{name}: '{value}' is not a whole number.");

@@ -9,7 +9,7 @@ namespace TerraPrety.Preview;
 // Regenerates map regions the game already stored in a savegame and reports how closely they match.
 public static class Verifier
 {
-    public static bool Run(MapGenerator gen, SaveFile save, int maxRegions = 64)
+    public static bool Run(MapGenerator gen, SaveFile save, int maxRegions = 5000)
     {
         var positions = save.RegionPositions().ToList();
         // Spread the sample over the whole explored area rather than taking a contiguous block.
@@ -19,7 +19,7 @@ public static class Verifier
         var landform = new Stat("Landform map");
         var height = new Stat("Landform height map");
         var climate = new Stat("Climate map");
-        var worstRegions = new List<(double Score, int X, int Z)>();
+        var regionScores = new List<(double Score, int X, int Z)>();
 
         foreach (var (rx, rz) in sample)
         {
@@ -31,16 +31,23 @@ public static class Verifier
             double lfScore = landform.Add(lf, region.LandformMap, tolerance: 0);
             if (region.ModMaps.TryGetValue("LandformHeightMap", out var storedHeights)) height.Add(heights, storedHeights, tolerance: 0);
             climate.Add(gen.RegionClimateMap(rx, rz), region.ClimateMap, tolerance: 0);
-            worstRegions.Add((lfScore, rx, rz));
+            regionScores.Add((lfScore, rx, rz));
         }
 
         Console.WriteLine($"Compared {sample.Count} of {positions.Count} stored map regions:");
         foreach (var s in new[] { ocean, landform, height, climate }) Console.WriteLine("  " + s);
 
-        var worst = worstRegions.OrderBy(w => w.Score).Take(3).Where(w => w.Score < 1).ToList();
-        if (worst.Count > 0)
+        var mismatched = regionScores.Where(r => r.Score < 1).ToList();
+        Console.WriteLine($"  {regionScores.Count - mismatched.Count} of {regionScores.Count} regions have an identical landform map.");
+        if (mismatched.Count > 0)
         {
-            Console.WriteLine("  Least matching landform regions: " + string.Join(", ", worst.Select(w => $"({w.X},{w.Z}) {w.Score:P1}")));
+            var world = gen.World;
+            string Area((double Score, int X, int Z) r) =>
+                $"{r.X * world.RegionSize - world.MapSizeX / 2},{r.Z * world.RegionSize - world.MapSizeZ / 2} ({r.Score:P0})";
+            Console.WriteLine("  Differing regions (in-game coordinates of their north west corner, share of identical tiles): " +
+                              string.Join(", ", mismatched.OrderBy(r => r.Score).Take(12).Select(Area)) + (mismatched.Count > 12 ? $" and {mismatched.Count - 12} more" : ""));
+            Console.WriteLine("  The game never regenerates a region, so regions generated before a change to the mods, mod config or story");
+            Console.WriteLine("  structure locations keep the old terrain, and the preview, which shows the current setup, differs there.");
         }
         VerifySurfaceHeights(gen, save);
         return ocean.ExactFraction > 0.99 && landform.ExactFraction > 0.95;

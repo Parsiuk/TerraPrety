@@ -16,11 +16,12 @@ public class GeneratorSpec
 {
     public string GameDir;
     public string ModAssets;
+    public List<string> Mods;
     public WorldSettings World;
     public string ConfigJson;
     public List<StoryLocation> Story;
 
-    public MapGenerator Build() => new(World, JsonConvert.DeserializeObject<WorldGenConfig>(ConfigJson), new AssetSource(GameDir, ModAssets), Story);
+    public MapGenerator Build() => new(World, JsonConvert.DeserializeObject<WorldGenConfig>(ConfigJson), new AssetSource(GameDir, ModAssets, Mods, World.WorldConfig), Story);
 }
 
 // The mod's map layers keep static and per-instance RNG state, so they can't be shared between threads. Each worker

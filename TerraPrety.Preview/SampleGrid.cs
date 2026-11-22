@@ -14,6 +14,39 @@ public class SampleGrid
 
     public ref MapSample At(int px, int pz) => ref Samples[pz * Width + px];
 
+    // Terrain surface the game generated at each pixel's center (one above the top terrain block, so below sea level
+    // means water, as in MapSample.SurfaceY), NaN where the savegame has no map chunk.
+    public float[] ActualSurface(SaveFile save)
+    {
+        var result = new float[Width * Height];
+        Array.Fill(result, float.NaN);
+        int half = BlocksPerPixel / 2;
+
+        // Pixel index whose center lies on block coordinate b, or -1.
+        static int PixelAt(int b, int origin, int scale, int half, int count)
+        {
+            int offset = b - origin - half;
+            if (offset < 0 || offset % scale != 0) return -1;
+            int p = offset / scale;
+            return p < count ? p : -1;
+        }
+
+        foreach (var (cx, cz, heights) in save.MapChunkHeights())
+        {
+            for (int lz = 0; lz < 32; lz++)
+            {
+                int pz = PixelAt(cz * 32 + lz, OriginZ, BlocksPerPixel, half, Height);
+                if (pz < 0) continue;
+                for (int lx = 0; lx < 32; lx++)
+                {
+                    int px = PixelAt(cx * 32 + lx, OriginX, BlocksPerPixel, half, Width);
+                    if (px >= 0) result[pz * Width + px] = heights[lz * 32 + lx] + 1;
+                }
+            }
+        }
+        return result;
+    }
+
     public static SampleGrid Generate(MapGenerator gen, GeneratorSpec spec, Options options, int threads)
     {
         var world = spec.World;

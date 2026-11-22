@@ -21,11 +21,12 @@ public static class StoryStructures
         var stored = save.SaveGame.GetData<Vintagestory.API.Datastructures.OrderedDictionary<string, StoryStructureLocation>>("storystructurelocations");
         if (stored == null) return null;
 
-        var configs = LoadConfigs(assets, 1).ToDictionary(c => c.Code);
+        var configs = LoadConfigs(assets, 1).GroupBy(c => c.Code).ToDictionary(g => g.Key, g => g.First());
         var result = new List<StoryLocation>();
         foreach (var (code, loc) in stored)
         {
-            configs.TryGetValue(code, out var cfg);
+            // Like GenStoryStructures.SetupForceLandform: a structure whose config is gone (mod removed) forces nothing.
+            if (!configs.TryGetValue(code, out var cfg)) MissingConfigs.Add(code);
             result.Add(new StoryLocation(code, loc.CenterPos.X, loc.CenterPos.Z, cfg?.Radius ?? loc.LandformRadius, cfg?.RequireLandform));
         }
         return result;
@@ -73,10 +74,14 @@ public static class StoryStructures
         return placed.Select(p => p.Loc).ToList();
     }
 
+    // Story structures in the savegame without a config in the game or the loaded mods.
+    public static List<string> MissingConfigs { get; } = [];
+
+    // GenStoryStructures.InitWorldGen merges worldgen/storystructures.json from every domain (game first, then mods).
     private static IEnumerable<Config> LoadConfigs(AssetSource assets, double distScaling)
     {
-        var json = AssetSource.ParseLenient(assets.Get(new AssetLocation("game:worldgen/storystructures.json")).ToText());
-        foreach (var s in json["structures"].OfType<JObject>())
+        foreach (var s in assets.GetMany("worldgen/storystructures.json")
+                     .SelectMany(a => (((JObject)AssetSource.ParseLenient(a.ToText())).GetValue("structures", StringComparison.OrdinalIgnoreCase) as JArray)?.OfType<JObject>() ?? []))
         {
             int Get(string key) => (int)((int?)s.GetValue(key, StringComparison.OrdinalIgnoreCase) ?? 0);
             yield return new Config(

@@ -32,6 +32,12 @@ dotnet TerraPrety.Preview/bin/Release/net10.0/terraprety-preview.dll \
 
 Run with `--help` for all options. Coordinates are in-game coordinates, i.e. relative to the world spawn. The mod config defaults to `VintagestoryData/ModConfig/TerraPrety.json` when it exists; `--mod-assets` can point at a released mod zip instead of this repo's assets.
 
+### Other mods
+
+Other mods can change TerraPrety's map. The main way is through story structures that force land: every story structure with a `requireLandform` adds a forced continent point to TerraPrety's ocean map, which reshapes the coastline for thousands of blocks around it. BetterRuins, for example, adds 15 story structures and, when TerraPrety is installed, gives all of them `requireLandform: ultraflats`.
+
+So the tool loads the installed mods the way the game does: `VintagestoryData/Mods` by default (`--mods <dir>` for another folder, `--mods none` to leave them out), skipping mods disabled in the game's mod manager. Their `worldgen/storystructures.json` files are merged with the game's, `compatibility/<modid>/` folders are remapped, and all JSON patches are applied, honoring `dependsOn`, `condition` and `side`. Any TerraPrety in the mods folder is replaced by the one from `--mod-assets`.
+
 ### Layers
 
 | Layer       | Shows                                                                                         |
@@ -42,20 +48,21 @@ Run with `--help` for all options. Coordinates are in-game coordinates, i.e. rel
 | `ocean`     | Ocean map (oceanicity)                                                                        |
 | `mountains` | Mountain range opacity (red) and uplift (yellow) over the height map                          |
 | `climate`   | Temperature (blue to red) and rainfall (saturation)                                           |
+| `actual`    | With `--save`: the terrain the game generated, in the `composite` palette, with the estimate dimmed where nothing was generated yet. Compare with `composite`. |
 
 The white dot is the world spawn, magenta dots are story structures.
 
 ## Accuracy
 
-Run with `--save <world> --verify` to compare against what the game actually generated in that world. It regenerates the stored map regions and compares them tile by tile, then compares the estimated surface height against the stored terrain height maps.
+Run with `--save <world> --verify` to compare against what the game actually generated in that world. It regenerates every stored map region and compares it tile by tile, lists the regions that differ, and then compares the estimated surface height against the stored terrain height maps.
 
-- The **ocean, landform, landform height and climate maps** are the mod's own code and match the game exactly. On a 1.22.7 world with TerraPrety 7.11.1: 100% of tiles identical.
-- The **surface height** in `composite` is an estimate: each landform's 50% terrain threshold, lowered by oceanicity. The game computes the real height from 3D noise. On the same world: median error 3 blocks, 90th percentile 16 blocks, 87% land/water agreement.
-- Story structures from other mods: with `--save`, their positions are read from the savegame and marked, but their configs aren't loaded, so any landform they force isn't applied. With only `--seed` they aren't known at all. Vanilla story structures are handled in both modes.
+- The **ocean, landform, landform height and climate maps** are the mod's own code and match the game exactly, as long as the mods, the mod config and the story structure locations are the same as when the region was generated. The game never regenerates a region, so a world played under several setups is a patchwork. Example: on a 1.22 world with TerraPrety 7.11.1 and BetterRuins 0.6.4, 939 of 986 regions are identical. The other 47 were generated before BetterRuins' story structures forced land, and they match exactly with `--mods none`.
+- The **surface height** in `composite` is an estimate: each landform's 50% terrain threshold, lowered by oceanicity. The game computes the real height from 3D noise, blending neighbouring landforms. On the same world: median error 4 blocks, 90th percentile 23 blocks, 88% land/water agreement. Coastlines, seas and large lakes are where the game puts them. Small lakes and ponds are not. Use the `actual` layer to see the difference.
+- Story structures without a config (their mod was removed) force nothing, in the game and in the preview; the tool lists them. With only `--seed`, story structure locations are computed the way the game does for a new world. With `--save`, they are read from the savegame, which also picks up structures the game moved, e.g. with `/wgen story setpos`.
 - Rivers aren't drawn (they are disabled in the mod as well).
 
 ## How it works
 
 - `FakeServerApi` answers the few `ICoreServerAPI` members the map layers use (world size, assets) and throws on anything else, so a new dependency in the mod fails loudly.
-- `AssetSource` reads game assets from the install and mod assets from the repo or a zip, applying the mod's JSON patches.
+- `AssetSource` reads game assets from the install, TerraPrety's from the repo or a zip, and the other mods' from their zips or folders. It applies every mod's JSON patches as the game's `ModJsonPatchLoader` does.
 - The mod's noise classes keep RNG state in statics and fields, so they can't run on several threads at once. `ParallelSampler` gives each worker thread its own copy of the tool's assembly in a separate `AssemblyLoadContext`. The output is byte-identical to a single-threaded run (`--threads 1`).

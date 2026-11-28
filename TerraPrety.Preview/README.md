@@ -30,6 +30,10 @@ dotnet TerraPrety.Preview/bin/Release/net10.0/terraprety-preview.dll \
 dotnet TerraPrety.Preview/bin/Release/net10.0/terraprety-preview.dll \
     --save ~/.config/VintagestoryData/Saves/myworld.vcdbs --map-markers --layers composite,actual -o out/myworld.png
 
+# Existing world with its static translocators, repaired and broken, and lines between linked pairs
+dotnet TerraPrety.Preview/bin/Release/net10.0/terraprety-preview.dll \
+    --save ~/.config/VintagestoryData/Saves/myworld.vcdbs --map-translocators -o out/myworld.png
+
 # Zoom in on an in-game coordinate
 ... --center 1200,-3400 --size 8192 --scale 4
 ```
@@ -55,6 +59,8 @@ So the tool loads the installed mods the way the game does: `VintagestoryData/Mo
 | `actual`    | With `--save`: the terrain the game generated, in the `composite` palette, with the estimate dimmed where nothing was generated yet. Compare with `composite`. |
 
 The white dot is the world spawn, magenta dots are story structures. With `--map-markers` (needs `--save`), the waypoints players put on their in-game map are drawn on every layer, using the game's map icons (including icons added by mods) and the marker colors, with the same drop shadow as in the game. Icons are 8 to 16 px by default, growing with the image size; `--marker-size <px>` sets the size explicitly. Temporary markers are left out. An unknown icon is drawn as a circle, as in the game.
+
+With `--map-translocators` (needs `--save`), static translocators are drawn as inverted triangles whose bottom vertex sits on the translocator block: cyan when repaired, orange when broken. A light cyan line joins each linked pair. Translocators are placed by structure generation on the real terrain, so they can't be predicted from the seed. Only translocators in chunks the game already generated are shown. They're found the way the game looks for an exit point: every `gates` structure recorded in the map regions is searched for a `statictranslocator` block in the stored chunk data. A repaired translocator's link is read from its block entity.
 
 ## Accuracy
 

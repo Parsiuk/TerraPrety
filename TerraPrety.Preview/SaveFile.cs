@@ -81,6 +81,18 @@ public sealed class SaveFile : IDisposable
         return cmd.ExecuteScalar() is byte[] data ? ServerMapRegion.FromBytes(data) : null;
     }
 
+    // ChunkPos.ToChunkIndex for a chunk (32^3 blocks) in the main dimension: x | z << 27 | y << 54.
+    public static long ChunkKey(int chunkX, int chunkY, int chunkZ) => (long)((uint)chunkX | ((ulong)chunkZ << 27) | ((ulong)chunkY << 54));
+
+    // The serialized ServerChunk, or null if the game hasn't generated that chunk.
+    public byte[] GetChunk(int chunkX, int chunkY, int chunkZ)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT data FROM chunk WHERE position = $pos";
+        cmd.Parameters.AddWithValue("$pos", ChunkKey(chunkX, chunkY, chunkZ));
+        return cmd.ExecuteScalar() as byte[];
+    }
+
     // (chunkX, chunkZ, terrain height per column) for every map chunk the game generated.
     public IEnumerable<(int X, int Z, ushort[] Heights)> MapChunkHeights()
     {

@@ -31,6 +31,7 @@ public class Options
     public bool Verify;
     public bool AllLayersRequested;
     public bool MapMarkers;
+    public bool MapTranslocators;
     public int? MarkerSize;
     public int? Threads;
 
@@ -77,6 +78,8 @@ public class Options
           --threads <n>                  Worker threads for sampling (default: all CPU cores)
           --map-markers                  Draw the players' map markers from --save, with the in-game icons and colors
           --marker-size <px>             Map marker icon size in pixels (default: 8 to 16, growing with the image size)
+          --map-translocators            Draw the static translocators the game generated in --save: cyan when repaired,
+                                         orange when broken, with a line between linked ones
           --verify                       Compare the generated ocean and landform maps against the map regions
                                          the game stored in --save, and report how well they match
           -h, --help                     Show this help
@@ -139,6 +142,7 @@ public class Options
                 case "-o": case "--output": o.Output = Next(); break;
                 case "--verify": o.Verify = true; break;
                 case "--map-markers": o.MapMarkers = true; break;
+                case "--map-translocators": o.MapTranslocators = true; break;
                 case "--marker-size": o.MarkerSize = ParseInt(arg, Next()); break;
                 case "--threads": o.Threads = ParseInt(arg, Next()); break;
                 default: throw new ArgumentException("Unknown option: " + arg);
@@ -149,6 +153,7 @@ public class Options
         if (o.SizeBlocks < o.BlocksPerPixel) throw new ArgumentException("--size must be at least --scale.");
         if (o.Verify && o.SavePath == null) throw new ArgumentException("--verify needs --save.");
         if (o.MapMarkers && o.SavePath == null) throw new ArgumentException("--map-markers needs --save.");
+        if (o.MapTranslocators && o.SavePath == null) throw new ArgumentException("--map-translocators needs --save.");
         if (o.MarkerSize is int ms && (ms < 2 || ms > 256)) throw new ArgumentException("--marker-size must be between 2 and 256.");
         if (o.MarkerSize != null && !o.MapMarkers) throw new ArgumentException("--marker-size needs --map-markers.");
         if (o.SavePath == null && o.AllLayersRequested) o.Layers.Remove("actual");

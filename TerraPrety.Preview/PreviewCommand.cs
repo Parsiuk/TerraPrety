@@ -82,6 +82,17 @@ public static class PreviewCommand
                               (unknown.Count > 0 ? $"; unknown icon(s) {string.Join(", ", unknown)} drawn as circle, as in the game" : ""));
         }
 
+        List<Translocator> translocators = null;
+        if (options.MapTranslocators)
+        {
+            sw.Restart();
+            translocators = Translocators.FromSave(save, out int without);
+            int repaired = translocators.Count(t => t.Repaired);
+            Console.WriteLine($"{translocators.Count} translocators ({repaired} repaired, {translocators.Count - repaired} broken, " +
+                              $"{translocators.Count(t => t.Link != null)} linked) read in {sw.Elapsed.TotalSeconds:0.0}s" +
+                              (without > 0 ? $"; {without} translocator structure(s) without a translocator block (removed, or chunk not generated)" : ""));
+        }
+
         float[] actual = null;
         if (options.Layers.Contains("actual"))
         {
@@ -94,7 +105,7 @@ public static class PreviewCommand
         {
             var path = options.Layers.Count == 1 ? options.Output
                 : Path.Combine(Path.GetDirectoryName(options.Output) ?? "", Path.GetFileNameWithoutExtension(options.Output) + "-" + layer + ".png");
-            Png.Write(path, grid.Width, grid.Height, Renderer.Render(layer, grid, gen, world, actual, markers, icons, options.MarkerSize));
+            Png.Write(path, grid.Width, grid.Height, Renderer.Render(layer, grid, gen, world, actual, markers, icons, options.MarkerSize, translocators));
             Console.WriteLine($"Wrote {path}");
         }
         return 0;

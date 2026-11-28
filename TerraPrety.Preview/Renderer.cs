@@ -8,9 +8,11 @@ namespace TerraPrety.Preview;
 public static class Renderer
 {
     public static uint[] Render(string layer, SampleGrid grid, MapGenerator gen, WorldSettings world, float[] actualSurface = null,
-                                IReadOnlyList<MapMarker> markers = null, SvgIcons icons = null, int? markerSize = null)
+                                IReadOnlyList<MapMarker> markers = null, SvgIcons icons = null, int? markerSize = null,
+                                IReadOnlyList<Translocator> translocators = null)
     {
         var pixels = RenderLayer(layer, grid, gen, world, actualSurface);
+        if (translocators != null) DrawTranslocators(pixels, grid, translocators);
         if (markers != null && icons != null) DrawMapMarkers(pixels, grid, markers, icons, markerSize);
         return pixels;
     }
@@ -166,6 +168,114 @@ public static class Renderer
         int markerRadius = Math.Clamp(grid.Width / 300, 2, 6);
         Mark(world.MapSizeX / 2, world.MapSizeZ / 2, 0xffffff, markerRadius + 1);
         foreach (var loc in gen.StoryLocations) Mark(loc.X, loc.Z, 0xff3df5, markerRadius);
+    }
+
+    private const uint RepairedTranslocator = 0x3ee0f0, BrokenTranslocator = 0xd08a3a, LinkLine = 0x9ff6ff, Outline = 0x101010;
+
+    // Static translocators as inverted triangles, the bottom vertex on the translocator's block, and a line between each
+    // linked pair. Broken ones are drawn first so repaired ones end up on top where they overlap.
+    private static void DrawTranslocators(uint[] pixels, SampleGrid grid, IReadOnlyList<Translocator> translocators)
+    {
+        // Center of a block in pixel space, where pixel i covers [i, i + 1).
+        (double X, double Z) ToPixel(int bx, int bz) =>
+            ((bx + 0.5 - grid.OriginX) / grid.BlocksPerPixel, (bz + 0.5 - grid.OriginZ) / grid.BlocksPerPixel);
+
+        var drawn = new HashSet<((int, int, int), (int, int, int))>();
+        foreach (var t in translocators)
+        {
+            if (t.Link is not { } link) continue;
+            var a = (t.X, t.Y, t.Z);
+            if (!drawn.Add(a.CompareTo(link) < 0 ? (a, link) : (link, a))) continue;
+            var (x0, z0) = ToPixel(t.X, t.Z);
+            var (x1, z1) = ToPixel(link.X, link.Z);
+            DrawLine(pixels, grid, x0, z0, x1, z1, LinkLine, 0.9);
+        }
+
+        double width = Math.Clamp(grid.Width / 200, 7, 14), height = width * 0.9;
+        foreach (var t in translocators.OrderBy(t => t.Repaired).ThenBy(t => t.Z))
+        {
+            var (ax, az) = ToPixel(t.X, t.Z);
+            if (ax < -width || az < -1 || ax >= grid.Width + width || az >= grid.Height + height + 2) continue;
+            DrawTriangle(pixels, grid, ax, az, width, height, 1.0, Outline);
+            DrawTriangle(pixels, grid, ax, az, width, height, 0, t.Repaired ? RepairedTranslocator : BrokenTranslocator);
+        }
+    }
+
+    // A triangle pointing down with its bottom vertex at (ax, az), grown by `grow` pixels on every side, blended in with
+    // 4x4 supersampled coverage.
+    private static void DrawTriangle(uint[] pixels, SampleGrid grid, double ax, double az, double width, double height, double grow, uint color)
+    {
+        // Edges as inward unit normals n and a point p on the edge: inside where n . (s - p) >= -grow.
+        (double X, double Z) left = (ax - width / 2, az - height), right = (ax + width / 2, az - height);
+        (double Nx, double Nz, double Px, double Pz)[] edges =
+        [
+            Edge(left.X, left.Z, right.X, right.Z),
+            Edge(right.X, right.Z, ax, az),
+            Edge(ax, az, left.X, left.Z),
+        ];
+
+        // Inward normal of the edge a -> b for a triangle wound left, right, apex (clockwise on screen, z down).
+        static (double, double, double, double) Edge(double x0, double z0, double x1, double z1)
+        {
+            double dx = x1 - x0, dz = z1 - z0, len = Math.Sqrt(dx * dx + dz * dz);
+            return (-dz / len, dx / len, x0, z0);
+        }
+
+        const int Sub = 4;
+        int px0 = (int)Math.Floor(left.X - grow - 1), px1 = (int)Math.Ceiling(right.X + grow + 1);
+        int pz0 = (int)Math.Floor(left.Z - grow - 1), pz1 = (int)Math.Ceiling(az + grow * 2 + 1);
+        for (int pz = Math.Max(0, pz0); pz <= Math.Min(grid.Height - 1, pz1); pz++)
+        {
+            for (int px = Math.Max(0, px0); px <= Math.Min(grid.Width - 1, px1); px++)
+            {
+                int inside = 0;
+                for (int sz = 0; sz < Sub; sz++)
+                {
+                    for (int sx = 0; sx < Sub; sx++)
+                    {
+                        double x = px + (sx + 0.5) / Sub, z = pz + (sz + 0.5) / Sub;
+                        bool ok = true;
+                        foreach (var e in edges)
+                        {
+                            if (e.Nx * (x - e.Px) + e.Nz * (z - e.Pz) < -grow) { ok = false; break; }
+                        }
+                        if (ok) inside++;
+                    }
+                }
+                if (inside == 0) continue;
+                ref uint p = ref pixels[pz * grid.Width + px];
+                p = Lerp(p, color, inside / (double)(Sub * Sub));
+            }
+        }
+    }
+
+    // An anti-aliased 1 px line (Xiaolin Wu), clipped to the image; endpoints may lie far outside it.
+    private static void DrawLine(uint[] pixels, SampleGrid grid, double x0, double z0, double x1, double z1, uint color, double opacity)
+    {
+        void Plot(int x, int z, double coverage)
+        {
+            if (x < 0 || z < 0 || x >= grid.Width || z >= grid.Height || coverage <= 0) return;
+            ref uint p = ref pixels[z * grid.Width + x];
+            p = Lerp(p, color, coverage * opacity);
+        }
+
+        // Work in pixel-center coordinates so integer positions are pixel centers.
+        x0 -= 0.5; z0 -= 0.5; x1 -= 0.5; z1 -= 0.5;
+        bool steep = Math.Abs(z1 - z0) > Math.Abs(x1 - x0);
+        if (steep) { (x0, z0) = (z0, x0); (x1, z1) = (z1, x1); }
+        if (x0 > x1) { (x0, x1) = (x1, x0); (z0, z1) = (z1, z0); }
+        double dx = x1 - x0, gradient = dx == 0 ? 0 : (z1 - z0) / dx;
+        int major = steep ? grid.Height : grid.Width;
+
+        int start = (int)Math.Max(Math.Round(x0), 0), end = (int)Math.Min(Math.Round(x1), major - 1);
+        for (int i = start; i <= end; i++)
+        {
+            double z = z0 + gradient * (i - x0);
+            int zi = (int)Math.Floor(z);
+            double f = z - zi;
+            if (steep) { Plot(zi, i, 1 - f); Plot(zi + 1, i, f); }
+            else { Plot(i, zi, 1 - f); Plot(i, zi + 1, f); }
+        }
     }
 
     // WaypointMapComponent.Render: the icon in black at 60% opacity, a little larger and offset down right, then the

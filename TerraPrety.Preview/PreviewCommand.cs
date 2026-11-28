@@ -83,7 +83,7 @@ public static class PreviewCommand
         }
 
         List<Translocator> translocators = null;
-        if (options.MapTranslocators)
+        if (options.MapTranslocators != null)
         {
             sw.Restart();
             translocators = Translocators.FromSave(save, out int without);
@@ -91,6 +91,12 @@ public static class PreviewCommand
             Console.WriteLine($"{translocators.Count} translocators ({repaired} repaired, {translocators.Count - repaired} broken, " +
                               $"{translocators.Count(t => t.Link != null)} linked) read in {sw.Elapsed.TotalSeconds:0.0}s" +
                               (without > 0 ? $"; {without} translocator structure(s) without a translocator block (removed, or chunk not generated)" : ""));
+            if (options.MapTranslocators != "all")
+            {
+                bool wantRepaired = options.MapTranslocators == "repaired";
+                translocators = translocators.Where(t => t.Repaired == wantRepaired).ToList();
+                Console.WriteLine($"Drawing the {translocators.Count} {options.MapTranslocators} ones");
+            }
         }
 
         float[] actual = null;
